@@ -97,18 +97,22 @@ if USE_PG:
     def _adapt(sql):
         return sql.replace('?', '%s')
 
+    def _pg_row(r):
+        from datetime import datetime as _dt
+        return {k: (v.isoformat() if isinstance(v, _dt) else v) for k, v in dict(r).items()}
+
     def q(sql, params=()):
         _pg_ensure()
         with _pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(_adapt(sql), params)
-            return [dict(r) for r in cur.fetchall()]
+            return [_pg_row(r) for r in cur.fetchall()]
 
     def q1(sql, params=()):
         _pg_ensure()
         with _pg.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(_adapt(sql), params)
             r = cur.fetchone()
-            return dict(r) if r else None
+            return _pg_row(r) if r else None
 
     def run(sql, params=()):
         _pg_ensure()
