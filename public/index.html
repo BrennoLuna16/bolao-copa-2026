@@ -221,6 +221,19 @@ select.form-control option { background: var(--bg2); }
 .modal h2 { font-size: 1.2rem; margin-bottom: 8px; color: var(--gold); }
 .modal p { color: var(--muted); font-size: 0.88rem; margin-bottom: 20px; }
 
+/* ── Live badge ── */
+.live-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(207,34,46,0.15); color: #f85149;
+  border: 1px solid rgba(207,34,46,0.4); border-radius: 50px;
+  padding: 2px 8px; font-size: 0.68rem; font-weight: 700;
+  animation: pulse-live 1.5s infinite;
+}
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; } 50% { opacity: 0.5; }
+}
+.last-updated { font-size: 0.72rem; color: var(--muted); text-align: right; margin-bottom: 8px; }
+
 /* ── Toast ── */
 #toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px);
@@ -292,6 +305,7 @@ select.form-control option { background: var(--bg2); }
       <div class="card-title">🏆 Classificação Geral</div>
       <button class="btn btn-secondary btn-sm" onclick="loadStandings()">↻ Atualizar</button>
     </div>
+    <div id="sync-status-bar" class="last-updated"></div>
     <div id="standings-content"><div class="loader">Carregando...</div></div>
   </div>
 </section>
@@ -339,6 +353,15 @@ select.form-control option { background: var(--bg2); }
 
     <!-- Stats -->
     <div class="stat-grid" id="admin-stats"></div>
+
+    <!-- Sync -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <div class="card-title">🔄 Sincronização de Resultados</div>
+        <button id="admin-sync-btn" class="btn btn-secondary btn-sm" onclick="adminSyncNow()">🔄 Sincronizar Agora</button>
+      </div>
+      <div id="sync-status-bar-admin" style="font-size:0.8rem;color:var(--muted);padding:4px 0"></div>
+    </div>
 
     <!-- Add Match -->
     <div class="card">
@@ -801,9 +824,12 @@ function renderMatchCard(m) {
   }
 
   const groupBadge = m.group_name ? `<span class="match-group">Grupo ${m.group_name}</span>` : '';
+  const liveBadge = m.is_live ? `<span class="live-badge">🔴 AO VIVO</span>` : '';
   const scoreDisplay = finished
     ? `<div class="match-score">${m.home_score} — ${m.away_score}</div>`
-    : `<div class="match-score pending">vs</div>`;
+    : m.is_live
+      ? `<div class="match-score" style="color:#f85149">? — ?</div>`
+      : `<div class="match-score pending">vs</div>`;
 
   function btnClass(type) {
     let cls = 'bet-btn';
@@ -836,7 +862,7 @@ function renderMatchCard(m) {
           <div class="team-name">${m.home_team}</div>
         </div>
         <div class="match-center">
-          ${groupBadge}
+          ${groupBadge}${liveBadge}
           ${scoreDisplay}
           <div class="match-time-display">${fmtDate(m.match_time)}</div>
           ${matchDeadlineInfo}
@@ -1399,6 +1425,55 @@ async function loadAdminBetsView() {
     showUserModal();
   }
 })();
+
+// ── Auto-refresh & Sync Status ─────────────────────────────────────────────
+let _currentTab = 'apostas';
+const _origSwitch = switchTab;
+window.switchTab = function(tab) { _currentTab = tab; _origSwitch(tab); };
+
+async function updateSyncStatus() {
+  try {
+    const d = await fetch('/api/sync/status').then(r => r.json());
+    let txt = '';
+    if (d.status === 'ok') {
+      const t = d.time ? new Date(d.time + 'Z').toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) : '--';
+      txt = `🔄 Última atualização: ${t}${d.updated > 0 ? ` · ${d.updated} resultado(s) novo(s)` : ''}`;
+    } else if (d.status === 'never') {
+      txt = '🔄 Sincronização automática ativa';
+    } else {
+      txt = `⚠️ Sync: ${d.status}`;
+    }
+    ['sync-status-bar', 'sync-status-bar-admin'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    });
+  } catch {}
+}
+
+async function adminSyncNow() {
+  const btn = document.getElementById('admin-sync-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sincronizando...'; }
+  try {
+    const r = await fetch('/api/admin/sync', { method: 'POST', headers: { 'x-admin-password': adminPwd } });
+    const d = await r.json();
+    toast(`✅ Sincronizado! ${d.updated} resultado(s) atualizado(s).`, 'success');
+    await Promise.all([loadStandings(), loadApostas(), loadAdminPanel(), updateSyncStatus()]);
+  } catch (e) {
+    toast('Erro ao sincronizar: ' + e, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Sincronizar Agora'; }
+  }
+}
+
+// Poll every 60 seconds: refresh current tab + sync status
+setInterval(async () => {
+  updateSyncStatus();
+  if (_currentTab === 'classificacao') loadStandings();
+  else if (_currentTab === 'apostas') loadApostas();
+  else if (_currentTab === 'grupos') loadGroups();
+}, 60000);
+
+updateSyncStatus();
 </script>
 </body>
 </html>

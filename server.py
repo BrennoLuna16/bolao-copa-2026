@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Bolão Copa do Mundo 2026"""
-import sqlite3, json, os, re
+import sqlite3, json, os, re, threading, time as _time
+import urllib.request as _urllib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE, 'data', 'bolao.db')
@@ -173,8 +174,102 @@ def betting_open(match_id):
         return False
     if not prev_round_complete(m['phase'], m['round_number']):
         return False
-    # Cada jogo trava no SEU próprio horário
     return bool(m['match_time']) and now_utc() < m['match_time'][:16]
+
+# ── Auto-sync de resultados (ESPN API) ────────────────────────────────────────
+
+_last_sync = {'time': None, 'status': 'never', 'updated': 0}
+
+ESPN_NAMES = {
+    'Mexico': 'México', 'South Africa': 'África do Sul',
+    'South Korea': 'Coreia do Sul', 'Czech Republic': 'República Tcheca',
+    'Czechia': 'República Tcheca',
+    'Canada': 'Canadá', 'Bosnia and Herzegovina': 'Bósnia e Herzegovina',
+    'Bosnia & Herzegovina': 'Bósnia e Herzegovina',
+    'Bosnia-Herzegovina': 'Bósnia e Herzegovina',
+    'United States': 'Estados Unidos', 'Paraguay': 'Paraguai',
+    'Qatar': 'Catar', 'Switzerland': 'Suíça',
+    'Brazil': 'Brasil', 'Morocco': 'Marrocos',
+    'Haiti': 'Haiti', 'Scotland': 'Escócia',
+    'Australia': 'Austrália', 'Turkey': 'Turquia', 'Türkiye': 'Turquia',
+    'Germany': 'Alemanha', 'Curacao': 'Curaçao', 'Curaçao': 'Curaçao',
+    'Netherlands': 'Holanda', 'Japan': 'Japão',
+    "Ivory Coast": 'Costa do Marfim', "Côte d'Ivoire": 'Costa do Marfim',
+    'Ecuador': 'Equador', 'Sweden': 'Suécia', 'Tunisia': 'Tunísia',
+    'Spain': 'Espanha', 'Cape Verde': 'Cabo Verde',
+    'Belgium': 'Bélgica', 'Egypt': 'Egito',
+    'Saudi Arabia': 'Arábia Saudita', 'Uruguay': 'Uruguai',
+    'Iran': 'Irã', 'New Zealand': 'Nova Zelândia',
+    'France': 'França', 'Iraq': 'Iraque', 'Norway': 'Noruega',
+    'Algeria': 'Argélia', 'Austria': 'Áustria', 'Jordan': 'Jordânia',
+    'DR Congo': 'Congo RD', 'Congo DR': 'Congo RD',
+    'Democratic Republic of Congo': 'Congo RD',
+    'England': 'Inglaterra', 'Croatia': 'Croácia',
+    'Ghana': 'Gana', 'Panama': 'Panamá',
+    'Uzbekistan': 'Uzbequistão', 'Colombia': 'Colômbia',
+    'Senegal': 'Senegal', 'Argentina': 'Argentina', 'Portugal': 'Portugal',
+}
+
+def fetch_and_sync(_q=None, _q1=None, _run=None):
+    global _last_sync
+    _q = _q or q; _q1 = _q1 or q1; _run = _run or run
+    updated = 0
+    try:
+        dates = [(datetime.utcnow() - timedelta(days=i)).strftime('%Y%m%d') for i in range(8)]
+        seen = set()
+        for d in dates:
+            url = f'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates={d}'
+            try:
+                req = _urllib.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                with _urllib.urlopen(req, timeout=10) as r:
+                    data = json.loads(r.read())
+            except Exception:
+                continue
+            for ev in data.get('events', []):
+                eid = ev.get('id')
+                if eid in seen: continue
+                seen.add(eid)
+                comp = ev['competitions'][0]
+                if not comp['status']['type'].get('completed'): continue
+                cs = comp.get('competitors', [])
+                if len(cs) < 2: continue
+                home = next((c for c in cs if c.get('homeAway') == 'home'), cs[0])
+                away = next((c for c in cs if c.get('homeAway') == 'away'), cs[1])
+                hn = ESPN_NAMES.get(home['team']['displayName'], home['team']['displayName'])
+                an = ESPN_NAMES.get(away['team']['displayName'], away['team']['displayName'])
+                try:
+                    hs, as_ = int(home.get('score', 0)), int(away.get('score', 0))
+                except (ValueError, TypeError):
+                    continue
+                m = _q1('SELECT id FROM matches WHERE home_team=? AND away_team=? AND is_finished=0', (hn, an))
+                if m:
+                    _run('UPDATE matches SET home_score=?, away_score=?, is_finished=1 WHERE id=?', (hs, as_, m['id']))
+                    updated += 1
+        _last_sync = {'time': now_utc(), 'status': 'ok', 'updated': updated}
+    except Exception as e:
+        _last_sync = {'time': now_utc(), 'status': f'erro: {e}', 'updated': 0}
+    return updated
+
+def _sync_worker():
+    if USE_PG:
+        import psycopg2, psycopg2.extras as _ext
+        conn = psycopg2.connect(_DATABASE_URL); conn.autocommit = True
+        def _tq(sql, p=()):
+            with conn.cursor(cursor_factory=_ext.RealDictCursor) as c:
+                c.execute(sql.replace('?','%s'), p); return [dict(r) for r in c.fetchall()]
+        def _tq1(sql, p=()):
+            with conn.cursor(cursor_factory=_ext.RealDictCursor) as c:
+                c.execute(sql.replace('?','%s'), p); r = c.fetchone(); return dict(r) if r else None
+        def _tr(sql, p=()):
+            with conn.cursor() as c: c.execute(sql.replace('?','%s'), p)
+    else:
+        _tq, _tq1, _tr = q, q1, run
+    _time.sleep(30)
+    while True:
+        fetch_and_sync(_tq, _tq1, _tr)
+        _time.sleep(300)  # a cada 5 minutos
+
+threading.Thread(target=_sync_worker, daemon=True).start()
 
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -222,7 +317,12 @@ class H(BaseHTTPRequestHandler):
                     cache_prev[key] = {'prev_ok': total > 0 and total == done, 'prev_remaining': total - done}
             prev = cache_prev[key]
             match_started = bool(m['match_time']) and now >= m['match_time'][:16]
-            m['round_deadline'] = m['match_time']  # cada jogo tem seu próprio prazo
+            try:
+                mt = datetime.strptime(m['match_time'], '%Y-%m-%dT%H:%M')
+                m['is_live'] = (not m['is_finished']) and match_started and datetime.utcnow() <= mt + timedelta(minutes=115)
+            except Exception:
+                m['is_live'] = False
+            m['round_deadline'] = m['match_time']
             m['round_prev_remaining'] = prev['prev_remaining']
             if not prev['prev_ok']:
                 m['round_reason'] = 'waiting_prev'
@@ -308,6 +408,9 @@ class H(BaseHTTPRequestHandler):
                 result[g] = sorted(groups[g].values(), key=lambda t: (-t['points'],-t['gd'],-t['gf'],t['team']))
             self.send_json(result)
 
+        elif path == '/api/sync/status':
+            self.send_json(_last_sync)
+
         elif path == '/api/stats':
             if not self.is_admin(): self.send_json({'error':'Não autorizado'},401); return
             self.send_json({
@@ -383,6 +486,11 @@ class H(BaseHTTPRequestHandler):
                 run('INSERT INTO bets (user_id,match_id,prediction) VALUES (?,?,?) ON CONFLICT(user_id,match_id) DO UPDATE SET prediction=excluded.prediction',
                     (bet['user_id'], bet['match_id'], bet['prediction']))
             self.send_json({'inserted':len(bets)})
+
+        elif path == '/api/admin/sync':
+            if not self.is_admin(): self.send_json({'error':'Não autorizado'},401); return
+            n = fetch_and_sync()
+            self.send_json({'updated': n, **_last_sync})
 
         else:
             self.send_json({'error':'Not found'},404)
