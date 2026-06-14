@@ -219,7 +219,10 @@ def fetch_and_sync(_q=None, _q1=None, _run=None):
     _q = _q or q; _q1 = _q1 or q1; _run = _run or run
     updated = 0
     try:
-        dates = [(datetime.utcnow() - timedelta(days=i)).strftime('%Y%m%d') for i in range(8)]
+        # Check past 8 days for results + next 14 days for time corrections
+        past = [(datetime.utcnow() - timedelta(days=i)).strftime('%Y%m%d') for i in range(8)]
+        future = [(datetime.utcnow() + timedelta(days=i)).strftime('%Y%m%d') for i in range(1, 15)]
+        dates = list(dict.fromkeys(past + future))
         seen = set()
         for d in dates:
             url = f'https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates={d}'
@@ -234,21 +237,28 @@ def fetch_and_sync(_q=None, _q1=None, _run=None):
                 if eid in seen: continue
                 seen.add(eid)
                 comp = ev['competitions'][0]
-                if not comp['status']['type'].get('completed'): continue
                 cs = comp.get('competitors', [])
                 if len(cs) < 2: continue
                 home = next((c for c in cs if c.get('homeAway') == 'home'), cs[0])
                 away = next((c for c in cs if c.get('homeAway') == 'away'), cs[1])
                 hn = ESPN_NAMES.get(home['team']['displayName'], home['team']['displayName'])
                 an = ESPN_NAMES.get(away['team']['displayName'], away['team']['displayName'])
-                try:
-                    hs, as_ = int(home.get('score', 0)), int(away.get('score', 0))
-                except (ValueError, TypeError):
-                    continue
-                m = _q1('SELECT id FROM matches WHERE home_team=? AND away_team=? AND is_finished=0', (hn, an))
-                if m:
-                    _run('UPDATE matches SET home_score=?, away_score=?, is_finished=1 WHERE id=?', (hs, as_, m['id']))
-                    updated += 1
+                espn_time = comp.get('startDate', '').replace('Z', '')[:16]
+                completed = comp['status']['type'].get('completed', False)
+                if completed:
+                    try:
+                        hs, as_ = int(home.get('score', 0)), int(away.get('score', 0))
+                    except (ValueError, TypeError):
+                        continue
+                    m = _q1('SELECT id FROM matches WHERE home_team=? AND away_team=? AND is_finished=0', (hn, an))
+                    if m:
+                        _run('UPDATE matches SET home_score=?, away_score=?, is_finished=1 WHERE id=?', (hs, as_, m['id']))
+                        updated += 1
+                elif espn_time:
+                    # Correct match time for upcoming unfinished matches
+                    m = _q1('SELECT id, match_time FROM matches WHERE home_team=? AND away_team=? AND is_finished=0', (hn, an))
+                    if m and m['match_time'][:16] != espn_time:
+                        _run('UPDATE matches SET match_time=? WHERE id=?', (espn_time, m['id']))
         _last_sync = {'time': now_utc(), 'status': 'ok', 'updated': updated}
     except Exception as e:
         _last_sync = {'time': now_utc(), 'status': f'erro: {e}', 'updated': 0}
