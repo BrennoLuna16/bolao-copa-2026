@@ -408,7 +408,7 @@ select.form-control option { background: var(--bg2); }
             <label>Fase</label>
             <select class="form-control" id="f-phase">
               <option value="group">Fase de Grupos (5 pts)</option>
-              <option value="pre_r32">Pré-Oitavas (10 pts)</option>
+              <option value="pre_r32">Pré-Oitavas (5 pts)</option>
               <option value="r16">Oitavas de Final (15 pts)</option>
               <option value="qf">Quartas de Final (20 pts)</option>
               <option value="sf">Semifinal (25 pts)</option>
@@ -614,7 +614,7 @@ const PHASE_LABELS = {
   sf: 'Semifinal',
   final: 'Final'
 };
-const PHASE_PTS = { group: 5, pre_r32: 10, r16: 15, qf: 20, sf: 25, final: 40 };
+const PHASE_PTS = { group: 5, pre_r32: 5, r16: 15, qf: 20, sf: 25, final: 40 };
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg, type = 'success') {
