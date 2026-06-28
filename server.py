@@ -12,7 +12,7 @@ PUBLIC_DIR = os.path.join(BASE, 'public')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'copa2026')
 PORT = int(os.environ.get('PORT', 3000))
 
-PHASE_POINTS = {'group': 5, 'pre_r32': 10, 'r16': 15, 'qf': 20, 'sf': 25, 'final': 40}
+PHASE_POINTS = {'group': 5, 'pre_r32': 5, 'r16': 15, 'qf': 20, 'sf': 25, 'final': 40}
 MIME = {'.html':'text/html; charset=utf-8','.css':'text/css','.js':'application/javascript','.json':'application/json','.png':'image/png','.ico':'image/x-icon','.svg':'image/svg+xml'}
 
 # ── Database backend (SQLite local / PostgreSQL production) ───────────────────
