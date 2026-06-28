@@ -1486,23 +1486,27 @@ async function adminSyncNow() {
 // Pre_r32 matches in bracket order (top→bottom). IDs are production DB IDs.
 const BK_R32 = [
   // Half 1 — SF1 side
+  // QF1: R16_A(SoAf/Can vs Ned/Mar) + R16_B(Ger/Par vs Fra/Sue)
   {id:90,  hf:'🇿🇦', home:'África do Sul',    af:'🇨🇦', away:'Canadá'},
-  {id:92,  hf:'🇩🇪', home:'Alemanha',          af:'🇵🇾', away:'Paraguai'},
-  {id:91,  hf:'🇧🇷', home:'Brasil',            af:'🇯🇵', away:'Japão'},
-  {id:93,  hf:'🇨🇮', home:'Costa do Marfim',   af:'🇳🇴', away:'Noruega'},
-  {id:84,  hf:'🇪🇸', home:'Espanha',           af:'🇦🇹', away:'Áustria'},
-  {id:77,  hf:'🇵🇹', home:'Portugal',          af:'🇭🇷', away:'Croácia'},
-  {id:82,  hf:'🇧🇪', home:'Bélgica',           af:'🇸🇳', away:'Senegal'},
-  {id:83,  hf:'🇺🇸', home:'Est. Unidos',       af:'🇧🇦', away:'Bósnia'},
+  {id:95,  hf:'🇳🇱', home:'Holanda',          af:'🇲🇦', away:'Marrocos'},
+  {id:92,  hf:'🇩🇪', home:'Alemanha',         af:'🇵🇾', away:'Paraguai'},
+  {id:94,  hf:'🇫🇷', home:'França',           af:'🇸🇪', away:'Suécia'},
+  // QF2: R16_C(Bra/Jap vs IvC/Nor) + R16_D(Mex/Ecu vs Eng/Congo)
+  {id:91,  hf:'🇧🇷', home:'Brasil',           af:'🇯🇵', away:'Japão'},
+  {id:93,  hf:'🇨🇮', home:'Costa do Marfim',  af:'🇳🇴', away:'Noruega'},
+  {id:96,  hf:'🇲🇽', home:'México',           af:'🇪🇨', away:'Equador'},
+  {id:73,  hf:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', home:'Inglaterra',      af:'🇨🇩', away:'Congo RD'},
   // Half 2 — SF2 side
-  {id:95,  hf:'🇳🇱', home:'Holanda',           af:'🇲🇦', away:'Marrocos'},
-  {id:94,  hf:'🇫🇷', home:'França',            af:'🇸🇪', away:'Suécia'},
-  {id:96,  hf:'🇲🇽', home:'México',            af:'🇪🇨', away:'Equador'},
-  {id:73,  hf:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', home:'Inglaterra',       af:'🇨🇩', away:'Congo RD'},
-  {id:87,  hf:'🇦🇺', home:'Austrália',         af:'🇪🇬', away:'Egito'},
-  {id:89,  hf:'🇨🇴', home:'Colômbia',          af:'🇬🇭', away:'Gana'},
-  {id:86,  hf:'🇨🇭', home:'Suíça',             af:'🇩🇿', away:'Argélia'},
-  {id:88,  hf:'🇦🇷', home:'Argentina',         af:'🇨🇻', away:'Cabo Verde'},
+  // QF3: R16_E(Esp/Aut vs Por/Cro) + R16_F(Bel/Sen vs EUA/Bos)
+  {id:84,  hf:'🇪🇸', home:'Espanha',          af:'🇦🇹', away:'Áustria'},
+  {id:77,  hf:'🇵🇹', home:'Portugal',         af:'🇭🇷', away:'Croácia'},
+  {id:82,  hf:'🇧🇪', home:'Bélgica',          af:'🇸🇳', away:'Senegal'},
+  {id:83,  hf:'🇺🇸', home:'Est. Unidos',      af:'🇧🇦', away:'Bósnia'},
+  // QF4: R16_G(Arg/CV vs Aus/Egi) + R16_H(Swi/Alg vs Col/Gha)
+  {id:88,  hf:'🇦🇷', home:'Argentina',        af:'🇨🇻', away:'Cabo Verde'},
+  {id:87,  hf:'🇦🇺', home:'Austrália',        af:'🇪🇬', away:'Egito'},
+  {id:86,  hf:'🇨🇭', home:'Suíça',            af:'🇩🇿', away:'Argélia'},
+  {id:89,  hf:'🇨🇴', home:'Colômbia',         af:'🇬🇭', away:'Gana'},
 ];
 
 // R16 dates (BRT) for display
