@@ -506,6 +506,23 @@ class H(BaseHTTPRequestHandler):
             n = fetch_and_sync()
             self.send_json({'updated': n, **_last_sync})
 
+        elif path == '/api/admin/merge-user':
+            if not self.is_admin(): self.send_json({'error':'Não autorizado'},401); return
+            from_name = b.get('from_name')
+            to_name = b.get('to_name')
+            if not from_name or not to_name:
+                self.send_json({'error':'from_name e to_name obrigatórios'},400); return
+            src = q1('SELECT * FROM users WHERE name=?', (from_name,))
+            if not src:
+                self.send_json({'error':f'Usuário "{from_name}" não encontrado'},404); return
+            dst = q1('SELECT * FROM users WHERE name=?', (to_name,))
+            if not dst:
+                run('INSERT INTO users (name) VALUES (?)', (to_name,))
+                dst = q1('SELECT * FROM users WHERE name=?', (to_name,))
+            transferred = run('UPDATE bets SET user_id=? WHERE user_id=?', (dst['id'], src['id'])).rowcount
+            run('DELETE FROM users WHERE id=?', (src['id'],))
+            self.send_json({'merged': transferred, 'from': from_name, 'to': to_name, 'target_id': dst['id']})
+
         else:
             self.send_json({'error':'Not found'},404)
 
